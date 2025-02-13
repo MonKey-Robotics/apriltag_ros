@@ -2,6 +2,7 @@
 #include "pose_estimation.hpp"
 #include <apriltag_msgs/msg/april_tag_detection.hpp>
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
+#include <apriltag_msgs/msg/april_tag_pose_id.hpp>
 #ifdef cv_bridge_HPP
 #include <cv_bridge/cv_bridge.hpp>
 #else
@@ -13,6 +14,8 @@
 #include <rclcpp_components/register_node_macro.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp> 
+#include <geometry_msgs/msg/pose_array.hpp> 
 #include <tf2_ros/transform_broadcaster.h>
 
 // apriltag
@@ -80,6 +83,8 @@ private:
 
     const image_transport::CameraSubscriber sub_cam;
     const rclcpp::Publisher<apriltag_msgs::msg::AprilTagDetectionArray>::SharedPtr pub_detections;
+    const rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pub_pose_array; // Updated this line
+    const rclcpp::Publisher<apriltag_msgs::msg::AprilTagPoseId>::SharedPtr pub_pose_id;
     tf2_ros::TransformBroadcaster tf_broadcaster;
 
     pose_estimation_f estimate_pose = nullptr;
@@ -105,6 +110,8 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
         declare_parameter("image_transport", "raw", descr({}, true)),
         rmw_qos_profile_sensor_data)),
     pub_detections(create_publisher<apriltag_msgs::msg::AprilTagDetectionArray>("detections", rclcpp::QoS(1))),
+    pub_pose_array(create_publisher<geometry_msgs::msg::PoseArray>("pose_array", rclcpp::QoS(1))), // Updated this line
+    pub_pose_id(create_publisher<apriltag_msgs::msg::AprilTagPoseId>("tag_pose_id", rclcpp::QoS(1))),
     tf_broadcaster(this)
 {
     // read-only parameters
@@ -184,6 +191,10 @@ void AprilTagNode::onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_i
     msg_detections.header = msg_img->header;
 
     std::vector<geometry_msgs::msg::TransformStamped> tfs;
+    
+    // Initialize PoseArray message
+    geometry_msgs::msg::PoseArray pose_array;
+    pose_array.header = msg_img->header;  // Set header for PoseArray
 
     for(int i = 0; i < zarray_size(detections); i++) {
         apriltag_detection_t* det;
@@ -223,9 +234,30 @@ void AprilTagNode::onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_i
         }
 
         tfs.push_back(tf);
+        
+        // Add pose to PoseArray
+        geometry_msgs::msg::Pose pose;
+        pose.position.x = tf.transform.translation.x;
+        pose.position.y = tf.transform.translation.y;
+        pose.position.z = tf.transform.translation.z;
+        pose.orientation = tf.transform.rotation;
+
+        pose_array.poses.push_back(pose); // Add pose to the PoseArray
+
+        apriltag_msgs::msg::AprilTagPoseId msg_pose_id;
+        msg_pose_id.header = msg_img->header;
+        msg_pose_id.family = std::string(det->family->name);
+        msg_pose_id.id = det->id;
+        msg_pose_id.pose.position.x = tf.transform.translation.x;
+        msg_pose_id.pose.position.y = tf.transform.translation.x;
+        msg_pose_id.pose.position.z = tf.transform.translation.z;
+        msg_pose_id.pose.orientation = tf.transform.rotation;
+
+        pub_pose_id->publish(msg_pose_id);  // Publish the new message
     }
 
     pub_detections->publish(msg_detections);
+    pub_pose_array->publish(pose_array); // Publish the PoseArray message
     tf_broadcaster.sendTransform(tfs);
 
     apriltag_detections_destroy(detections);
