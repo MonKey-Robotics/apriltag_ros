@@ -23,22 +23,25 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import os
 import ament_index_python.packages
-from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
-from launch.actions import ExecuteProcess
+import launch
+import launch_ros.actions
+#from launch import LaunchDescription
+#from launch_ros.actions import Node
+#from launch_ros.substitutions import FindPackageShare
+#from launch.actions import ExecuteProcess
 
 def generate_launch_description():
 
         config_directory = os.path.join(
           ament_index_python.packages.get_package_share_directory('apriltag_ros'),
-        'config')
+        'cfg')
         params = os.path.join(config_directory, 'tags_36h11.yaml')
         apriltag_node = launch_ros.actions.Node(
           package='apriltag_ros',
           executable='apriltag_node',
           output='both',
-          remappings=[('/zed/zed_node/left/image_rect_color', '/zed/zed_node/left/camera_info')],
+          remappings=[('image_rect', '/zed/zed_node/left/image_rect_color'), 
+          ('camera_info','/zed/zed_node/left/camera_info')],
           parameters=[params])
         
         return launch.LaunchDescription([

@@ -67,7 +67,7 @@ void getTagInfoFromDatabase(std::unordered_map<int, std::string>& tag_frames, st
     sqlite3_stmt* stmt;
 
     // Open the SQLite database
-    int rc = sqlite3_open("/root/dep_ws/src/april_ws/src/apriltag_ros/database/AprilTagConfig", &db); // Specify your database path
+    int rc = sqlite3_open("/root/dep_ws/src/apriltag_ros/apriltag_ros/database/AprilTagConfig", &db); // Specify your database path
     if (rc) {
          RCLCPP_ERROR(rclcpp::get_logger("AprilTagNode"), "Can't open database: %s", sqlite3_errmsg(db));
         return;
