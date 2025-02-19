@@ -43,9 +43,17 @@ def generate_launch_description():
           remappings=[('image_rect', '/zed/zed_node/left/image_rect_color'), 
           ('camera_info','/zed/zed_node/left/camera_info')],
           parameters=[params])
+          
+         rviz_node = launch_ros.actions.Node(
+         package = 'rviz2',
+         executable = 'rviz2,
+         name 'rviz'
+         output = 'screen')
         
         return launch.LaunchDescription([
          apriltag_node,
+         rviz_node
+         
 
         ])
     
