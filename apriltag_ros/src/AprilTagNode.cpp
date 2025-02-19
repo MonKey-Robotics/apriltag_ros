@@ -17,6 +17,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp> 
 #include <geometry_msgs/msg/pose_array.hpp> 
 #include <tf2_ros/transform_broadcaster.h>
+#include <sqlite3.h> //SQLite Library
 
 // apriltag
 #include "tag_functions.hpp"
@@ -58,6 +59,46 @@ descr(const std::string& description, const bool& read_only = false)
 
     return descr;
 }
+
+
+// SQLite query to get tag information (ID and Frame Name)
+void getTagInfoFromDatabase(std::unordered_map<int, std::string>& tag_frames, std::unordered_map<int, double>& tag_sizes) {
+    sqlite3* db;
+    sqlite3_stmt* stmt;
+
+    // Open the SQLite database
+    int rc = sqlite3_open("/root/dep_ws/src/april_ws/src/apriltag_ros/database/AprilTagConfig", &db); // Specify your database path
+    if (rc) {
+         RCLCPP_ERROR(rclcpp::get_logger("AprilTagNode"), "Can't open database: %s", sqlite3_errmsg(db));
+        return;
+    }
+
+    // Prepare SQL query to get both tag ID and corresponding frame name
+    std::string sql = "SELECT id, edge_size, frame FROM Data;"; // Assuming the database table has these columns
+    rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, 0);
+    if (rc != SQLITE_OK) {
+        RCLCPP_ERROR(rclcpp::get_logger("AprilTagNode"), "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return;
+    }
+
+    // Iterate over the rows in the result
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int tag_id = sqlite3_column_int(stmt, 0);
+        double edge_size = sqlite3_column_double(stmt, 1);
+        const char* frame_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        
+
+        // Store the tag ID, frame name, and size in the unordered maps
+        tag_frames[tag_id] = std::string(frame_name);
+        tag_sizes[tag_id] = edge_size;
+    }
+
+    // Clean up
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+}
+
 
 class AprilTagNode : public rclcpp::Node {
 public:
@@ -118,10 +159,8 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     const std::string tag_family = declare_parameter("family", "36h11", descr("tag family", true));
     tag_edge_size = declare_parameter("size", 1.0, descr("default tag size", true));
 
-    // get tag names, IDs and sizes
-    const auto ids = declare_parameter("tag.ids", std::vector<int64_t>{}, descr("tag ids", true));
-    const auto frames = declare_parameter("tag.frames", std::vector<std::string>{}, descr("tag frame names per id", true));
-    const auto sizes = declare_parameter("tag.sizes", std::vector<double>{}, descr("tag sizes per id", true));
+    // Get tag frames and sizes from SQLite database
+    getTagInfoFromDatabase(tag_frames, tag_sizes);  // Fetch both tag ID, frame, and size
 
     // get method for estimating tag pose
     estimate_pose = pose_estimation_methods.at(declare_parameter("pose_estimation_method", "pnp", descr("pose estimation method: \"pnp\" (more accurate) or \"homography\" (faster)", true)));
@@ -137,20 +176,20 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     declare_parameter("max_hamming", 0, descr("reject detections with more corrected bits than allowed"));
     declare_parameter("profile", false, descr("print profiling information to stdout"));
 
-    if(!frames.empty()) {
-        if(ids.size() != frames.size()) {
-            throw std::runtime_error("Number of tag ids (" + std::to_string(ids.size()) + ") and frames (" + std::to_string(frames.size()) + ") mismatch!");
-        }
-        for(size_t i = 0; i < ids.size(); i++) { tag_frames[ids[i]] = frames[i]; }
-    }
+    //if(!frames.empty()) {
+      //  if(ids.size() != frames.size()) {
+        //    throw std::runtime_error("Number of tag ids (" + std::to_string(ids.size()) + ") and frames (" + std::to_string(frames.size()) + ") mismatch!");
+       // }
+       // for(size_t i = 0; i < ids.size(); i++) { tag_frames[ids[i]] = frames[i]; }
+   // }
 
-    if(!sizes.empty()) {
+    //if(!sizes.empty()) {
         // use tag specific size
-        if(ids.size() != sizes.size()) {
-            throw std::runtime_error("Number of tag ids (" + std::to_string(ids.size()) + ") and sizes (" + std::to_string(sizes.size()) + ") mismatch!");
-        }
-        for(size_t i = 0; i < ids.size(); i++) { tag_sizes[ids[i]] = sizes[i]; }
-    }
+      //  if(ids.size() != sizes.size()) {
+        //    throw std::runtime_error("Number of tag ids (" + std::to_string(ids.size()) + ") and sizes (" + std::to_string(sizes.size()) + ") mismatch!");
+      //  }
+      //  for(size_t i = 0; i < ids.size(); i++) { tag_sizes[ids[i]] = sizes[i]; }
+   // }
 
     if(tag_fun.count(tag_family)) {
         tf = tag_fun.at(tag_family).first();

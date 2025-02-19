@@ -43,10 +43,14 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(Threads REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core calib3d)
 find_package(apriltag 3.2 REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
     add_compile_definitions(cv_bridge_HPP)
 endif()
+
+
+
 
 
 # database of tag functions
@@ -120,6 +124,7 @@ rclcpp_components_register_node(AprilTagNode
     PLUGIN "AprilTagNode"
     EXECUTABLE "apriltag_node"
 )
+target_link_libraries(AprilTagNode SQLite::SQLite3)
 
 ament_environment_hooks(${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH})
 
